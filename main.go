@@ -175,7 +175,11 @@ func approvesPR(path string) {
 }
 
 func main() {
-	fmt.Println("starting server at :8001")
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8081"
+	}
+	fmt.Println("starting server at " + port)
 	http.HandleFunc("/webhook", webhookHandler)
-	http.ListenAndServe(":8001", nil)
+	http.ListenAndServe(":"+port, nil)
 }
