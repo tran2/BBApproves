@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
+	"strings"
 )
 
 type slackProfile struct {
@@ -39,15 +41,25 @@ type pullRequestResponse struct {
 
 func webhookHandler(response http.ResponseWriter, request *http.Request) {
 	fmt.Println(request)
+	if request.Header.Get("Authorization") != "***REMOVED***" {
+		response.WriteHeader(http.StatusUnauthorized)
+		response.Write([]byte("Unauthorized"))
+		return
+	}
+
 	body, err := ioutil.ReadAll(request.Body)
 	if err != nil {
 		fmt.Println(err)
+		http.Error(response, "Bad Request", http.StatusBadRequest)
+		return
 	}
-	fmt.Println(string(body))
+	fmt.Println("request body: " + string(body))
 	resBody := &zapierSlackMessage{}
 	err = json.Unmarshal(body, resBody)
 	if err != nil {
 		fmt.Println(err)
+		http.Error(response, "Bad Request", http.StatusBadRequest)
+		return
 	}
 
 	fmt.Println(resBody)
@@ -62,7 +74,8 @@ func webhookHandler(response http.ResponseWriter, request *http.Request) {
 	}
 
 	approvesPR(path)
-	response.Write([]byte("Ok"))
+	response.WriteHeader(http.StatusOK)
+	response.Write([]byte("Success"))
 }
 
 func getBBPath(slackMessage *zapierSlackMessage) (string, error) {
@@ -88,8 +101,12 @@ func getBBPath(slackMessage *zapierSlackMessage) (string, error) {
 
 func isUserAllowed(email string) bool {
 	allowedUsers := []string{"***REMOVED***", "***REMOVED***"}
+	if len(os.Getenv("ALLOWED_USERS")) > 0 {
+		allowedUsers = strings.Split(os.Getenv("ALLOWED_USERS"), ",")
+	}
+	str := fmt.Sprintf("allowedUsers %v", allowedUsers)
+	fmt.Println(str)
 	for _, userEmail := range allowedUsers {
-		fmt.Println("userEmail " + userEmail + " " + email)
 		if userEmail == email {
 			return true
 		}
@@ -101,28 +118,39 @@ func redirectPolicyFunc() {
 
 }
 
-func approvesPR(path string) {
-	client := &http.Client{}
-
+func sendRequestToBitBucket(method string, url string) ([]byte, error) {
 	bbUser := "***REMOVED***"
 	bbAppPassword := "***REMOVED***"
-	bbAPI := "https://api.bitbucket.org/2.0/repositories"
 
-	pullRequestURL := bbAPI + path
-	fmt.Println("pullRequestUrl", pullRequestURL)
-
-	req, err := http.NewRequest("GET", pullRequestURL, nil)
+	client := &http.Client{}
+	req, err := http.NewRequest(method, url, nil)
 	if err != nil {
 		fmt.Println(err)
+		return []byte{}, err
 	}
 
 	req.SetBasicAuth(bbUser, bbAppPassword)
 	resp, err := client.Do(req)
+
 	if err != nil {
 		fmt.Println(err)
+		return []byte{}, err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return []byte("Was not ok"), err
 	}
 
 	response, err := ioutil.ReadAll(resp.Body)
+	return response, err
+}
+
+func approvesPR(path string) {
+	bbAPI := "https://api.bitbucket.org/2.0/repositories"
+
+	pullRequestURL := bbAPI + path
+	fmt.Println("pullRequestUrl", pullRequestURL)
+	response, err := sendRequestToBitBucket("GET", pullRequestURL)
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -136,23 +164,14 @@ func approvesPR(path string) {
 
 	fmt.Println(pullRequest.Links.Approve.Href)
 
-	approveRequest, err := http.NewRequest("POST", pullRequest.Links.Approve.Href, nil)
+	approveResponse, err := sendRequestToBitBucket("POST", pullRequest.Links.Approve.Href)
 	if err != nil {
 		fmt.Println(err)
+		fmt.Println("Failed!")
 	}
 
-	approveRequest.SetBasicAuth(bbUser, bbAppPassword)
-	approveResponse, err := client.Do(approveRequest)
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	if approveResponse.StatusCode == http.StatusOK {
-		fmt.Println("Approved!")
-	} else {
-		fmt.Println("Failed")
-		fmt.Println(approveResponse)
-	}
+	fmt.Println("Approved!")
+	fmt.Println(approveResponse)
 }
 
 func main() {
