@@ -100,7 +100,7 @@ func getBBPath(slackMessage *zapierSlackMessage) (string, error) {
 }
 
 func isUserAllowed(email string) bool {
-	allowedUsers := []string{"***REMOVED***", "***REMOVED***"}
+	allowedUsers := []string{}
 	if len(os.Getenv("ALLOWED_USERS")) > 0 {
 		allowedUsers = strings.Split(os.Getenv("ALLOWED_USERS"), ",")
 	}
