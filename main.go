@@ -41,7 +41,7 @@ type pullRequestResponse struct {
 
 func webhookHandler(response http.ResponseWriter, request *http.Request) {
 	fmt.Println(request)
-	if request.Header.Get("Authorization") != "***REMOVED***" {
+	if request.Header.Get("Authorization") != os.Getenv("WEBHOOK_HANDSHAKE") {
 		response.WriteHeader(http.StatusUnauthorized)
 		response.Write([]byte("Unauthorized"))
 		return
@@ -114,13 +114,9 @@ func isUserAllowed(email string) bool {
 	return false
 }
 
-func redirectPolicyFunc() {
-
-}
-
 func sendRequestToBitBucket(method string, url string) ([]byte, error) {
-	bbUser := "***REMOVED***"
-	bbAppPassword := "***REMOVED***"
+	bbUser := os.Getenv("BBUSER")
+	bbAppPassword := os.Getenv("BBAPPPASS")
 
 	client := &http.Client{}
 	req, err := http.NewRequest(method, url, nil)
